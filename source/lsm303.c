@@ -9,7 +9,7 @@
 #include "lpc17xx_gpio.h"
 #include "lpc17xx_pinsel.h"
 
-int LSM303Init( void )
+void LSM303Init( void )
 {
 	PINSEL_CFG_Type PinCfg;
 
@@ -20,36 +20,23 @@ int LSM303Init( void )
 	//Setup Magnetometer
 	LSM303WriteReg(LSM303_MAGNETOMETER, LSM303_MAGNETOMETER_CRA_REG, LSM303_MAGNETOMETER_DR_15HZ);
 	LSM303WriteReg(LSM303_MAGNETOMETER, LSM303_MAGNETOMETER_CRB_REG, LSM303_MAGNETOMETER_GAIN_1_9G);
-	
-	//Setup Accelerometer
-	LSM303WriteReg(LSM303_ACCELEROMETER, LSM303_ACCELEROMETER_CTRL_REG2, 0x00);
-	LSM303WriteReg(LSM303_ACCELEROMETER, LSM303_ACCELEROMETER_CTRL_REG3, 0x02);
-	LSM303WriteReg(LSM303_ACCELEROMETER, LSM303_ACCELEROMETER_CTRL_REG4, 0x80);
-	//LSM303WriteReg(LSM303_ACCELEROMETER, LSM303_ACCELEROMETER_CTRL_REG1, 0x27);//(LSM303_ACCELEROMETER_NORMAL_MODE)|(LSM303_ACCELEROMETER_ODR_50HZ)|(LSM303_ACCELEROMETER_XON)|(LSM303_ACCELEROMETER_YON)|(LSM303_ACCELEROMETER_ZON));
-	
-	//Setup pin P2.8 for magnetometer interrupts
+
+	//Setup pin P2.8 for DRDY interrupts
 	PinCfg.OpenDrain 	= PINSEL_PINMODE_NORMAL;	//Not open drain
-	PinCfg.Pinmode 		= PINSEL_PINMODE_PULLDOWN;	//Interrupt is open drain
+	PinCfg.Pinmode 		= PINSEL_PINMODE_PULLDOWN;	//
 	PinCfg.Funcnum 		= PINSEL_FUNC_0;
 	PinCfg.Pinnum 		= 8;
 	PinCfg.Portnum 		= 2;
 	PINSEL_ConfigPin(&PinCfg);
 	
-	//Setup P0.16 for accelerometer interrputs
-	PinCfg.OpenDrain 	= PINSEL_PINMODE_NORMAL;	//Not open drain
-	PinCfg.Pinmode 		= PINSEL_PINMODE_TRISTATE;	//Interrupt is push-pull
-	PinCfg.Funcnum 		= PINSEL_FUNC_0;
-	PinCfg.Pinnum 		= 16;
-	PinCfg.Portnum 		= 0;
-	PINSEL_ConfigPin(&PinCfg);
-	
-	
-	return 0;
+	return;
 }
 
-uint8_t LSM303WriteReg(LSM303Device LSM303_DEV, uint8_t RegToWrite, uint8_t ValueToWrite)
+Bool LSM303WriteReg(LSM303Device LSM303_DEV, uint8_t RegToWrite, uint8_t ValueToWrite)
 {
 	I2C_M_SETUP_Type LSM303_I2C;
+	uint8_t LSM303WriteBuffer[2];
+	//uint8_t LSM303ReadBuffer;
 	
 	if(LSM303_DEV == LSM303_ACCELEROMETER)
 	{
@@ -64,21 +51,23 @@ uint8_t LSM303WriteReg(LSM303Device LSM303_DEV, uint8_t RegToWrite, uint8_t Valu
 	
 	LSM303_I2C.tx_data = LSM303WriteBuffer;
 	LSM303_I2C.tx_length = 2;
-	LSM303_I2C.rx_data = LSM303ReadBuffer;
+	//LSM303_I2C.rx_data = LSM303ReadBuffer;
 	LSM303_I2C.rx_length = 0;
 	LSM303_I2C.retransmissions_max = 3;
 
-	if (I2C_MasterTransferData(I2CDEV, &LSM303_I2C, I2C_TRANSFER_POLLING) == SUCCESS){
-		return (0);
-	} else {
-		return (-1);
+	if (I2C_MasterTransferData(I2CDEV, &LSM303_I2C, I2C_TRANSFER_POLLING) == SUCCESS)
+	{
+		return TRUE;
 	}
+	return FALSE;
 }
 
 
-uint8_t LSM303ReadReg(LSM303Device LSM303_DEV, uint8_t RegToRead)
+Bool LSM303ReadReg(LSM303Device LSM303_DEV, uint8_t RegToRead, uint8_t *RegData)
 {
 	I2C_M_SETUP_Type LSM303_I2C;
+	uint8_t LSM303WriteBuffer;
+	uint8_t LSM303ReadBuffer;
 	
 	if(LSM303_DEV == LSM303_ACCELEROMETER)
 	{
@@ -90,91 +79,61 @@ uint8_t LSM303ReadReg(LSM303Device LSM303_DEV, uint8_t RegToRead)
 		LSM303_I2C.sl_addr7bit = LSM303_MAGNETOMETER_ADDRESS;
 		//LSM303WriteBuffer[0] = 0x0F;
 	}
-	LSM303WriteBuffer[0] = RegToRead;
+	LSM303WriteBuffer = RegToRead;
 	
-	LSM303_I2C.tx_data = LSM303WriteBuffer;
+	LSM303_I2C.tx_data = &LSM303WriteBuffer;
 	LSM303_I2C.tx_length = 1;
-	LSM303_I2C.rx_data = LSM303ReadBuffer;
+	LSM303_I2C.rx_data = &LSM303ReadBuffer;
 	LSM303_I2C.rx_length = 1;
 	LSM303_I2C.retransmissions_max = 3;
 
 	if (I2C_MasterTransferData(I2CDEV, &LSM303_I2C, I2C_TRANSFER_POLLING) == SUCCESS)
 	{
-		return (0);
-	} 
-	else 
-	{
-		LED(1,1);
-		return (5);
+		*RegData = LSM303ReadBuffer;
+		return TRUE;
 	}
+	return FALSE;
 }
 
-
-
-
-int LSM303SendCommand(int LSM303_DEV, int command)
+Bool LSM303ReadData(LSM303Device LSM303_DEV)
 {
 	I2C_M_SETUP_Type LSM303_I2C;
-	
-	if(LSM303_DEV == 0)
-	{
-		LSM303_I2C.sl_addr7bit = LSM303_ACCELEROMETER_ADDRESS;
-		LSM303WriteBuffer[0] = 0x20;
-	}
-	else if (LSM303_DEV == 1)
-	{
-		LSM303_I2C.sl_addr7bit = LSM303_MAGNETOMETER_ADDRESS;
-		LSM303WriteBuffer[0] = 0x0F;
-	}
-	
-	LSM303_I2C.tx_data = LSM303WriteBuffer;
-	LSM303_I2C.tx_length = 1;
-	LSM303_I2C.rx_data = LSM303ReadBuffer;
-	LSM303_I2C.rx_length = 1;
-	LSM303_I2C.retransmissions_max = 3;
-
-	
-	
-	if (I2C_MasterTransferData(I2CDEV, &LSM303_I2C, I2C_TRANSFER_POLLING) == SUCCESS)
-	{
-		return (0);
-	} 
-	else
-	{	
-		LED(1,1);
-		return (5);
-	}
-}
-
-
-uint8_t LSM303ReadData(LSM303Device LSM303_DEV)
-{
-	I2C_M_SETUP_Type LSM303_I2C;
+	uint8_t LSM303WriteBuffer;
+	uint8_t LSM303ReadBuffer[6];
 	
 	if(LSM303_DEV == LSM303_ACCELEROMETER)
 	{
 		LSM303_I2C.sl_addr7bit = LSM303_ACCELEROMETER_ADDRESS;
-		LSM303WriteBuffer[0] = (LSM303_ACCELEROMETER_OUT_X_L) | 0x80;
+		LSM303WriteBuffer = LSM303_ACCELEROMETER_OUT_X_L;
 	}
 	else if (LSM303_DEV == LSM303_MAGNETOMETER)
 	{
 		LSM303_I2C.sl_addr7bit = LSM303_MAGNETOMETER_ADDRESS;
-		LSM303WriteBuffer[0] = (LSM303_MAGNETOMETER_OUT_X_H) | 0x80;
+		LSM303WriteBuffer = LSM303_MAGNETOMETER_OUT_X_H;
 	}
 	
-	LSM303_I2C.tx_data = LSM303WriteBuffer;
+	LSM303_I2C.tx_data = &LSM303WriteBuffer;
 	LSM303_I2C.tx_length = 1;
 	LSM303_I2C.rx_data = LSM303ReadBuffer;
 	LSM303_I2C.rx_length = 6;
 	LSM303_I2C.retransmissions_max = 3;
 
-	if (I2C_MasterTransferData(I2CDEV, &LSM303_I2C, I2C_TRANSFER_POLLING) == SUCCESS)
+	if (I2C_MasterTransferData(I2CDEV, &LSM303_I2C, I2C_TRANSFER_POLLING) != SUCCESS)
 	{
-		return (0);
-	}
-	else
+		return FALSE;
+	} 
+	
+	if(LSM303_DEV == LSM303_ACCELEROMETER)
 	{
-		LED(1,1);
-		return (5);
+		LSM303AccelerometerData[0] = LSM303ReadBuffer[0] || (LSM303ReadBuffer[1] << 8);
+		LSM303AccelerometerData[1] = LSM303ReadBuffer[2] || (LSM303ReadBuffer[3] << 8);
+		LSM303AccelerometerData[2] = LSM303ReadBuffer[4] || (LSM303ReadBuffer[5] << 8);
 	}
+	else if (LSM303_DEV == LSM303_MAGNETOMETER)
+	{
+		LSM303MagnetometerData[0] = LSM303ReadBuffer[1] || (LSM303ReadBuffer[0] << 8);
+		LSM303MagnetometerData[1] = LSM303ReadBuffer[3] || (LSM303ReadBuffer[2] << 8);
+		LSM303MagnetometerData[2] = LSM303ReadBuffer[5] || (LSM303ReadBuffer[4] << 8);
+	}
+	return TRUE;
 }

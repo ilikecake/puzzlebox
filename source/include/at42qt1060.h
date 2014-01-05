@@ -4,7 +4,11 @@
 #ifndef _AT42QT1060_H_
 #define _AT42QT1060_H_
 
+//Standard type definitions
+#include "lpc_types.h"
+
 #define AT42QT1060_I2C_ADDRESS	0x12
+#define AT42QT1060_CAL_TIMEOUT	0xFFFF
 
 //Register definitions
 #define AT42QT1060_REG_CHIPID			0x00
@@ -33,10 +37,10 @@
 #define AT42QT1060_REG_DI				0X30
 #define AT42QT1060_REG_PWM_LEVEL		0X31
 
-void AT42QT1060Init( void );
-void AT42QT1060Reset(unsigned char reset);
-unsigned char AT42QT1060ReadByte(unsigned char address);
-unsigned char AT42QT1060WriteByte(unsigned char address, unsigned char ByteToWrite);
+Bool AT42QT1060Init( void );
+void AT42QT1060Reset(uint8_t reset);
+Bool AT42QT1060ReadByte(uint8_t address, uint8_t *readData);
+Bool AT42QT1060WriteByte(uint8_t address, uint8_t ByteToWrite);
 
 
 

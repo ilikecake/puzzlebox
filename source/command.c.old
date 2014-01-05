@@ -1,0 +1,887 @@
+//Command interpreter
+//11/2/2011 - PDS
+
+//#include <avr/pgmspace.h>
+//#include "USBConsole.h"
+
+#include "main.h"
+//#include "command.h"
+
+//#include "spi.h"
+//#include "MCP41xx.h"
+//#include "adc.h"
+//#include "pca9535.h"
+//#include "twi.h"
+
+//#include <string.h>
+//#include <stdio.h>
+
+//take this one out later...
+//#include <avr/io.h>
+
+//Global Variables
+char command[MAX_COMMAND_LENGTH+1];
+char old_command[MAX_COMMAND_LENGTH+1];
+int8_t c_pos;
+char cArgs[MAX_ARGS][MAX_COMMAND_LENGTH];
+int8_t numArgs;
+
+
+
+#define argAsChar(x) (cArgs[x-1])
+
+
+
+//TODO: these probably shouldnt go here...
+FATFS FileSystem;
+DIR OpenDirectoryObject;
+FILINFO FileInfoObject;
+
+
+//int8_t CommandArrow = 0;
+
+
+
+//uint16_t A440_lookup[109] = {32768,34495,36216,37926,39619,41288,42930,44538,46107,47632,49107,50528,51891,53190,54421,55580,56664,57668,58590,59427,60174,60831,61395,61864,62237,62511,62687,62764,62742,62620,62399,62079,61663,61151,60544,59846,59057,58182,57222,56181,55062,53870,52607,51279,49889,48443,46945,45399,43812,42188,40533,38852,37150,35435,33710,31983,30258,28541,26838,25155,23497,21870,20280,18730,17227,15776,14381,13047,11778,10579,9454,8405,7438,6555,5758,5052,4437,3916,3490,3162,2932,2801,2770,2837,3005,3270,3634,4094,4650,5298,6038,6866,7780,8777,9854,11007,12232,13525,14881,16297,17768,19288,20854,22458,24097,25765,27455,29164,30884};
+
+//Helper function declerations
+int16_t argAsInt(uint8_t argNum);
+void clearArgs(void);
+void ClearCommand(void);
+static int help_C(void);
+
+//Custom functions
+static int LED_C			(void);
+static int ComRead_C		(void);
+static int GPSRaw_C			(void);
+static int ADInit_C			(void);
+static int ADRead_C			(void);
+static int ADWrite_C		(void);
+static int TRead_C			(void);
+static int TInit_C			(void);
+static int I2STest_C		(void);
+static int TimeTest_C		(void);
+//static int RTCSet_C			(void);
+static int RTCGet_C			(void);
+static int SDInit_C			(void);
+static int FatFSTest_C		(void);
+
+static int MountSD_C		(void);
+static int UMountSD_C		(void);
+static int LS_C				(void);
+static int ReadFile_C		(void);
+static int CHDIR_C			(void);
+
+//Command list
+static const CommandListItem MCommandList[] =
+{
+	{ "help",		0,  1,	help_C,				"This help list",					"help has no arguments"			},
+	{ "led",  		2,  2,	LED_C,				"Change LED State",					"led <number> <state>" 			},
+	{ "gpsraw",  	0,  0,	GPSRaw_C,			"Output raw data from GPS",			"gpsraw has no arguments" 		},
+	{ "adinit",    	0,  0,	ADInit_C,			"Initalize the ADAU1381",			"adinit has no arguments"		},
+	{ "adread",    	1,  1,	ADRead_C,			"Read property from ADAU1381",		"adread <property>" 			},
+	{ "adwrite",   	2,  2,	ADWrite_C,			"Write property to ADAU1381",		"adwrite <property> <value>" 	},
+	{ "tread",   	1,  1,	TRead_C,			"Read property from at42q1060",		"tread <property>" 				},
+	{ "comread",   	2,  2,	ComRead_C,			"Read a register from LSM303",		"comread <device> <register>"	},
+	{ "tinit",   	0,  0,	TInit_C,			"Initalize the touch sensor",		"tinit has no arguments"		},
+	{ "i2st",   	3,  3,	I2STest_C,			"Test I2S",							"i2st <freq> <amp> <offset>"	},
+	{ "timer",   	0,  0,	TimeTest_C,			"Test the speed of a function",		"timer has no arguments"		},
+	//{ "setrtc",   0,  0,	RTCSet_C,			"Set the RTC",						"timer has no arguments"		},
+	{ "getrtc",   	0,  0,	RTCGet_C,			"Print the RTC time",				"getrtc has no arguments"		},
+	{ "sdinit",   	1,  1,	SDInit_C,			"Initalize the SD card",			"sdinit has no arguments"		},
+	{ "fatfs",   	1,  1,	FatFSTest_C,		"Test FatFS Functions",				"fatfs <arg>"					},
+	{ "mount",   	0,  0,	MountSD_C,			"Initalize and mount the SD card",	"'mount' has no parameters"		},
+	{ "umount",   	0,  0,	UMountSD_C,			"unmount the SD card",				"'umount' has no parameters"	},
+	{ "ls",   		0,  0,	LS_C,				"Show contents of directory",		"'ls' has no parameters"		},
+	{ "read",  		2,  2,	ReadFile_C,			"Read bytes from file",				"read <filename> <bytes>"		},
+	{ "cd",  		1,  1,	CHDIR_C,			"Change directory",					"cd <directory>"				},
+};
+
+//Take command and call the appropriate function
+void ParseCommand(void)
+{
+	//Find command name and arguments
+	char comName[MAX_COMMAND_LENGTH] = "";
+	int comPos = -1;
+	int j = 0;
+	int i;
+	
+	clearArgs();
+	
+#if COMMAND_DEBUG == 1
+	VCOM_printf("String to parse: %s\n", command);
+#endif
+	
+	//while (command[c_pos-1] == 32)	//Remove trailing spaces
+	//{
+	//	c_pos--;
+	//}
+	
+	for(i = 0; i < c_pos; i++)
+	{
+		if(comPos == -1)				//Extract command name
+		{
+			if(command[i] == 32)		//End of command string
+			{
+				comPos++;
+				j = 0;
+#if COMMAND_DEBUG == 1
+				VCOM_printf("Command: %s at index %d\n", comName, i);
+#endif
+			}
+			else
+			{
+				comName[j] = command[i];
+				j++;
+			}
+		}
+		else							//Extract command arguments
+		{
+			if(command[i] == 32)
+			{
+				if(command[i-1] != 32)	//End of argument string
+				{
+					cArgs[comPos][j] = '\0';
+					comPos++;
+					j = 0;
+#if COMMAND_DEBUG == 1
+					VCOM_printf("argument(%d): %s\n",comPos, cArgs[comPos]);				
+#endif
+				}
+			}
+			else
+			{
+				cArgs[comPos][j] = command[i];
+				j++;
+			}
+		}
+	}
+	numArgs = comPos+1;
+	
+#if COMMAND_DEBUG == 1
+	VCOM_printf("--------------\n");
+	VCOM_printf("Command: %s\n", comName);
+	for (i=0;i<numArgs;i++)
+	{
+		VCOM_printf("Argument(%d): %s, length %d\n", i, cArgs[i], strlen(cArgs[i]));
+	}
+	VCOM_printf("--------------\n");
+#endif
+	
+	//Search for command in list, verify number of arguments, and execute command
+	for(i = 0; i < sizeof(MCommandList)/CLI_Size; i++)			
+	{
+		if(strcmp(comName, MCommandList[i].name) == 0)
+		{
+			//printf("Handler1: %d\n",*help_C );
+			//printf("Handler: %d\n",pgm_read_word(&MCommandList[i].handler) );
+			if(numArgs < MCommandList[i].minArgs)
+			{
+				VCOM_printf("Not enough arguments\n");
+				return;
+			}
+			else if(numArgs > MCommandList[i].maxArgs)
+			{
+				VCOM_printf("Too many arguments\n");
+				return;
+			}
+			
+			((void(*)(void))MCommandList[i].handler)();
+			return;
+		}
+	}
+	VCOM_printf("Invalid command. Type 'help' for command list.\n");
+}
+
+void CommandGetInput(uint8_t c)
+{
+	uint8_t outByte[2];
+	outByte[0] = c;
+	outByte[1] = '\0';
+
+	switch(c)
+	{
+		case 8:		//backspace
+			if(c_pos > 0)
+			{
+				command[c_pos-1] = '\0';
+				c_pos--;
+				VCOM_printf("\b \b");
+			}
+			break;
+		
+		case 13:	//enter
+			VCOM_printf("\n");
+			if(c_pos > 0)
+			{
+				//printf("I heard: %s, position %d\n",command, c_pos);
+				ParseCommand();
+				ClearCommand();
+			}
+			break;
+			
+		//Detect arrow key presses and escape.
+		//An arrow key is seen as three seperate key presses:
+		//	up		-	'esc','[','A' or ([27],[91],[65]) 
+		//	down	-	'esc','[','B' or ([27],[91],[66]) 
+		//	right	-	'esc','[','C' or ([27],[91],[67]) 
+		//	left	-	'esc','[','D' or ([27],[91],[68]) 
+		//NOTE: This code will not allow a '[' to be heard after an escape press
+		case 0x1B :		//escape (this also denotes arrow keys)
+			//CommandArrow = 1;
+			break;
+			
+		default:
+			/*if (CommandArrow == 1)		
+			{
+				if (c == '[')				//an arrow key was pressed, do not record this to the buffer.
+				{
+					CommandArrow = 2;
+					break;
+				}
+				CommandArrow = 0;				//an arrow key was not pressed, carry on...
+			}
+			if (CommandArrow == 2)			//Identify which arrow key is pressed, ignore all arrows for now...
+			{
+				if (c == 'A')			//Pressing up clears the current command and writes the last command to the screen.
+				{
+					for(int i = c_pos; i>0; i--)
+					{
+						printf ("\b \b");
+					}
+					strcpy(command, old_command);
+					c_pos = strnlen(command, MAX_COMMAND_LENGTH);
+					printf("%s",command);
+				}
+				else if (c == 'B')		//down
+				{
+					//printf ("DOWN");
+				}
+				else if (c == 'C')		//right
+				{
+					//printf ("RIGHT");
+				}
+				else if (c == 'D')		//left
+				{
+					//printf ("LEFT");
+				}
+				CommandArrow = 0;
+				break;
+			}*/
+			
+			if (c >= 32 && c_pos < MAX_COMMAND_LENGTH)
+			{
+				command[c_pos] = (char) c;
+				c_pos++;
+				VCOM_printf("%s", outByte);
+			}
+	}
+}
+
+//Clears arguments, call this last
+void clearArgs(void)
+{
+	int i, j;
+	for(i = 0; i < MAX_COMMAND_LENGTH; i++)
+	{
+		for(j = 0; j < MAX_ARGS; j++)
+		{
+			cArgs[j][i] ='\0';
+		}
+	}
+	numArgs = 0;
+	return;
+}
+
+
+void ClearCommand(void)
+{
+	int i;
+	strcpy(old_command, command);
+	for(i=0; i<MAX_COMMAND_LENGTH;i++)
+	{
+		command[i] = '\0';
+	}
+	c_pos = 0;
+}
+
+
+//Returns argument argNum as interger.
+//argNum = 1 is the first argument
+//Invalid argument number or invalid characters will make the function return -1
+int16_t argAsInt(uint8_t argNum)
+{
+	int valToReturn = 0;
+	int i;
+	
+	if( argNum < 1 || argNum > numArgs)
+	{
+		return -1;
+	}
+	
+	//Handle hex input preceded by '0x' or '0X'
+	if(cArgs[argNum-1][1] == 'x' || cArgs[argNum-1][1] == 'X')
+	{
+		for(i=2; i<MAX_COMMAND_LENGTH; i++)
+		{
+			if (cArgs[argNum-1][i] == '\0')
+			{
+				break;
+			}
+			else if((cArgs[argNum-1][i] > 96) && (cArgs[argNum-1][i] < 103))	//lower case a through f
+			{
+				valToReturn = valToReturn*16+(10+cArgs[argNum-1][i]-97);
+			}
+			else if((cArgs[argNum-1][i] > 64) && (cArgs[argNum-1][i] < 71))	//upper case A through F
+			{
+				valToReturn = valToReturn*16+(10+cArgs[argNum-1][i]-65);
+			}
+			else if((cArgs[argNum-1][i] > 47) && (cArgs[argNum-1][i] < 58))	//0 through 9
+			{
+				valToReturn = valToReturn * 16 + (cArgs[argNum-1][i] - 48);
+			}
+			else
+			{
+				return -1;
+			}
+		}
+	}
+	
+	//Handle binary input preceded by '0b' or '0B'
+	else if(cArgs[argNum-1][1] == 'b' || cArgs[argNum-1][1] == 'B')
+	{
+		for(i=2; i<MAX_COMMAND_LENGTH; i++)
+		{
+			if (cArgs[argNum-1][i] == '\0')
+			{
+				break;
+			}
+			else if((cArgs[argNum-1][i] == 48) || (cArgs[argNum-1][i] == 49))	//lower case a through f
+			{
+				valToReturn = valToReturn*2+(cArgs[argNum-1][i]-48);
+			}
+			else
+			{
+				return -1;
+			}
+		}
+	}
+	
+	//Handle decimal
+	else
+	{
+		for(i=0; i<MAX_COMMAND_LENGTH; i++)
+		{
+			if (cArgs[argNum-1][i] == '\0')
+			{
+				break;
+			}
+			else if((cArgs[argNum-1][i] > 47) && (cArgs[argNum-1][i] < 58))
+			{
+				valToReturn = valToReturn * 10 + (cArgs[argNum-1][i] - 48);
+			}
+			else
+			{
+				return -1;
+			}
+		}
+	}
+	return valToReturn;
+}
+
+
+static int help_C (void)
+{
+	int i;
+	
+	if(numArgs > 0)
+	{
+		//Search for command in list, display help
+		for(i = 0; i < sizeof(MCommandList)/CLI_Size; i++)			
+		{
+			if(strcmp(cArgs[0], MCommandList[i].name) == 0)
+			{
+				VCOM_printf("%s\n", MCommandList[i].HelpText);
+				return 0;
+			}
+		}
+		VCOM_printf("Invalid command\n");
+	
+		//cArgs[0]
+		//VCOM_printf("help for %s\n",cArgs[0]);
+	}
+	else
+	{
+		VCOM_printf("Command List:\n");
+		for(i=0; i < sizeof(MCommandList)/CLI_Size; i++)
+		{
+			VCOM_printf("%12s:\t%s\n", MCommandList[i].name, MCommandList[i].DescText);
+		}
+	}
+	return 0;
+
+}
+
+//--------------------------------------------------------------
+//  Begin custom command functions
+//--------------------------------------------------------------
+
+static int LED_C (void)
+{
+	uint8_t LEDNum = argAsInt(1);
+	uint8_t LEDState = argAsInt(2);
+	if(LEDNum == 0)
+	{
+		LED (1, 0);
+		LED (2, 0);
+		LED (3, 0);
+	}
+	else if (LEDNum == 4)
+	{
+		LED (1, 1);
+		LED (2, 1);
+		LED (3, 1);
+	}
+	else
+	{
+		LED (LEDNum, LEDState);
+	}
+	return 0;
+}
+
+static int GPSRaw_C (void)
+{
+	GPSGetData(TRUE);
+	return 0;
+}
+
+static int ADRead_C (void)
+{
+	int16_t property = argAsInt(1);
+	uint8_t resp;
+	uint8_t PLLData[6];
+	
+	if(property == 0x4002)
+	{
+		if( ADAU1381GetPLL(PLLData) )
+		{
+			VCOM_printf("PLL[6]: %d\n", PLLData[0]);
+			VCOM_printf("PLL[5]: %d\n", PLLData[1]);
+			VCOM_printf("PLL[4]: %d\n", PLLData[2]);
+			VCOM_printf("PLL[3]: %d\n", PLLData[3]);
+			VCOM_printf("PLL[2]: %d\n", PLLData[4]);
+			VCOM_printf("PLL[1]: %d\n", PLLData[5]);
+		}
+		else
+		{
+			VCOM_printf("Communication error\n");
+		}
+		return 0;
+	}
+
+	if(ADAU1381GetProperty(property, &resp))
+	{
+		VCOM_printf("Response: %d\n", resp);
+	}
+	else
+	{
+		VCOM_printf("Communication error\n");
+	}
+	return 0;
+}
+
+static int ADWrite_C (void)
+{
+	int16_t property = argAsInt(1);
+	uint8_t inval = argAsInt(2);
+	
+	if(ADAU1381SetProperty(property, inval))
+	{
+		VCOM_printf("Command accepted\n");
+	}
+	else
+	{
+		VCOM_printf("Communication error\n");
+	}
+	return 0;
+}
+
+static int ADInit_C (void)
+{
+	if( ADAU1381Init() )
+	{
+		VCOM_printf("Command accepted\n");
+	}
+	else
+	{
+		VCOM_printf("Communication error\n");
+	}
+	return 0;
+}
+
+static int TRead_C (void)
+{
+	uint8_t readData;
+	uint8_t regToRead = argAsInt(1);
+	if( AT42QT1060ReadByte(regToRead, &readData) )
+	{
+		VCOM_printf("Response: %d\n", readData);
+	}
+	else
+	{
+		VCOM_printf("Communication error\n");
+	}
+	return 0;
+}
+
+static int ComRead_C (void)
+{
+	uint8_t devToRead = argAsInt(1);
+	uint8_t regToRead = argAsInt(2);
+	uint8_t resp;
+
+	if(devToRead == 0)
+	{
+		if(LSM303ReadReg(LSM303_ACCELEROMETER, regToRead, &resp) == TRUE)
+		{
+			VCOM_printf("ACCEL: %d\n", resp);
+		}
+		else
+		{
+			VCOM_printf("Error\n");
+		}
+	}
+	else
+	{
+		if(LSM303ReadReg(LSM303_MAGNETOMETER, regToRead, &resp) == TRUE)
+		{
+			VCOM_printf("MAG: %d\n", resp);
+		}
+		else
+		{
+			VCOM_printf("Error\n");
+		}
+	}
+
+	return 0;
+}
+
+static int TInit_C (void)
+{
+	VCOM_printf("Initalizing AT42QT1060...");
+	if(AT42QT1060Init() == TRUE)
+	{
+		VCOM_printf("OK\n");
+	}
+	else
+	{
+		VCOM_printf("Failed\n");
+	}
+	return 0;
+}
+
+static int I2STest_C (void)
+{
+	uint32_t I2SDataToTX;
+	uint8_t i = 0;
+	uint8_t I2STXFIFO_level;
+	int16_t I2SWordToTX;
+
+	uint16_t Freq;
+	float32_t Amplitude;
+	int16_t OffsetVal;
+	float32_t FrameLength;
+	//float32_t WaveLength;
+	uint16_t NumberOfFrames;
+	float32_t ConstantSin;
+	
+	//q15_t blarg;
+
+	Freq = argAsInt(1);
+	Amplitude = (float32_t)argAsInt(2);
+	OffsetVal = argAsInt(3);
+	FrameLength = 1.0f/(I2S_OUTPUT_FREQ_HZ);
+	ConstantSin = 2.0f*PI*FrameLength*(float32_t)Freq;
+	
+	NumberOfFrames = I2S_OUTPUT_FREQ_HZ/Freq;
+
+	VCOM_printf("Frequency is %dHz\n", Freq);
+	VCOM_printf("Using %d timesteps per wavelength\n", NumberOfFrames);
+
+	//for(i=0;i<=NumberOfFrames;i++)
+	//{
+	//	I2SWordToTX = 32768 + (30000.0f * arm_sin_f32(ConstantSin*(float32_t)i));
+	//	VCOM_printf("out(%d) = %d\n",i,I2SWordToTX);
+	//}
+
+	VCOM_printf("Sending data to I2S...\n");
+	I2S_Start(LPC_I2S);
+	while(!AnyKeyPressed())
+	{
+		I2STXFIFO_level = I2S_GetLevel(LPC_I2S, I2S_TX_MODE);
+		if(I2STXFIFO_level < 6)
+		{
+			I2SWordToTX = roundf((Amplitude * arm_sin_f32(ConstantSin*(float32_t)i)));
+			//I2SWordToTX = roundf(OffsetVal + (Amplitude * arm_sin_f32(ConstantSin*(float32_t)i)));
+			//I2SDataToTX = I2S_Pattern | (I2S_Pattern<<8) | (I2S_Pattern<<16) | (I2S_Pattern<<24);
+			I2SDataToTX = 0x0000FFFF & I2SWordToTX;//(I2SWordToTX | I2SWordToTX<<16);
+			
+			I2S_Send(LPC_I2S,I2SDataToTX);
+			i++;
+			
+			if(i > NumberOfFrames)
+			{
+				i = 0;
+			}
+			
+			//if(i <= NumberOfFrames)
+			//{
+			//	i++;
+			//}
+			//else
+			//{
+			//	i = 0;
+			//}
+			
+		}
+	}
+	I2S_Stop(LPC_I2S, I2S_TX_MODE);
+	VCOM_printf("I2S Stopped\n");
+	return 0;
+}
+
+static int TimeTest_C (void)
+{
+	uint32_t TimeTaken = 0;
+	
+	//definitions  and inital stuff for code to test
+	uint8_t i = 0;
+	
+	int16_t I2SWordToTX = 0;
+	uint16_t Freq;
+	int16_t OffsetVal;
+	uint16_t NumberOfFrames;
+	
+	uint32_t I2SDataToTX;
+
+	float32_t Amplitude_F;
+	float32_t FrameLength_F;
+	float32_t ConstantSin_F;
+	
+	uint16_t Amplitude_I;
+	q15_t FrameLength_Q15;
+	q15_t ConstantSin_Q15;
+	
+	Freq = 440;
+	Amplitude_F = 1000.0f;
+	OffsetVal = 0;
+	FrameLength_F = 1.0f/(I2S_OUTPUT_FREQ_HZ);
+	ConstantSin_F = 2.0f*PI*FrameLength_F*(float32_t)Freq;
+	NumberOfFrames = I2S_OUTPUT_FREQ_HZ/Freq;
+	
+	FrameLength_Q15 = 1.5;
+	VCOM_printf("Frequency is %dHz\n", FrameLength_Q15*1000.0d);
+	
+	
+	
+	
+	
+	//FrameLength_Q15 = 0;// 1.0d/I2S_OUTPUT_FREQ_HZ;
+	//ConstantSin_Q15 = 0;//2.0d*3.1415926d*FrameLength_Q15*(q15_t)Freq;
+	
+	//Amplitude_I = 1000;
+	//FrameLength_Q15 = 1.000000000000000d/I2S_OUTPUT_FREQ_HZ;
+	//ConstantSin_Q15 = 2.000000000000000d*PI*FrameLength_Q15*(q15_t)Freq;
+	
+	//arm_float_to_q15(&Amplitude_F, &Amplitude_Q15, 1);
+	//arm_float_to_q15(&FrameLength_F, &FrameLength_Q15, 1);
+	//arm_float_to_q15(&ConstantSin_F, &ConstantSin_Q15, 1);
+	
+	VCOM_printf("Frequency is %dHz\n", Freq);
+	VCOM_printf("Using %d timesteps per wavelength\n", NumberOfFrames);
+	i = 6;
+	
+	
+	//FrameLength_Q15 = 0;
+	VCOM_printf("blarg\n");
+	//VCOM_printf("taking SIN of %d\n", FrameLength_Q15);
+	Delay (1000);
+	
+	//Put code to test between the lines
+	StartTimer();
+	//---------------------------------------------------------------------------------------------------------
+
+	
+	arm_sin_q15(0);
+	
+	//I2SWordToTX = roundf((Amplitude_F * arm_sin_f32(ConstantSin_F*(float32_t)i)));
+	I2SDataToTX = 0x0000FFFF & I2SWordToTX;//(I2SWordToTX | I2SWordToTX<<16);
+	
+	
+	//---------------------------------------------------------------------------------------------------------
+	TimeTaken = StopTimer();
+	VCOM_printf("That took %d uS\n", TimeTaken);
+	
+	//VCOM_printf("I2S Data Calculated: %d\n", I2SDataToTX);
+
+	return 0;
+}
+
+static int RTCGet_C (void)
+{
+	RTC_TIME_Type TheCurrentTime;
+
+
+	VCOM_printf("RTC AUX: %d\n", LPC_RTC->RTC_AUX);
+	VCOM_printf("CTIME0: %d\n", LPC_RTC->CTIME0);
+
+	RTC_GetFullTime (LPC_RTC, &TheCurrentTime);
+	VCOM_printf("RTC Time: %d:%d:%d\n", TheCurrentTime.HOUR, TheCurrentTime.MIN, TheCurrentTime.SEC);
+	VCOM_printf("RTC Date: %d/%d/%d\n", TheCurrentTime.MONTH, TheCurrentTime.DOM, TheCurrentTime.YEAR);
+	
+	return 0;
+}
+
+
+static int SDInit_C (void)
+{
+	uint8_t InCommand;
+	
+	InCommand = argAsInt(1);
+
+	VCOM_printf("Response: %d\n", SDTest(InCommand));
+
+	
+	return 0;
+}
+
+
+static int FatFSTest_C (void)
+{
+	uint8_t InCommand;
+	FATFS FileSystem;
+	DIR OpenDirectoryObject;
+	FILINFO FileInfoObject;
+	
+	InCommand = argAsInt(1);
+	
+	/*switch(InCommand)
+	{
+		case 0:
+			VCOM_printf("Mount %d\n", f_mount(0, &FileSystem));
+			break;
+			
+		case 1:
+			VCOM_printf("Open Dir %d\n", f_opendir(&OpenDirectoryObject, "\\"));
+			break;
+			
+		case 2:
+			VCOM_printf("Read dir %d\n", f_readdir(&OpenDirectoryObject, &FileInfoObject));
+			VCOM_printf("\%s\n", FileInfoObject.fname);
+	}*/
+	return 0;
+}
+
+static int MountSD_C (void)
+{
+	f_mount(0, &FileSystem);
+	f_opendir(&OpenDirectoryObject, "\\");
+	return 0;
+}
+
+static int UMountSD_C (void)
+{
+	f_mount(0, NULL);
+	return 0;
+}
+
+static int LS_C (void)
+{
+	char *TempString;
+	FRESULT res;
+
+	//if(f_getcwd (TempString, 32) == FR_OK)
+	//{
+		//VCOM_printf("Listing directory %s\n", TempString);
+		
+		for (;;)
+		{
+            res = f_readdir(&OpenDirectoryObject, &FileInfoObject);	/* Read a directory item */
+            if (res != FR_OK || FileInfoObject.fname[0] == 0) break;	/* Break on error or end of dir */
+            if (FileInfoObject.fname[0] == '.') continue;				/* Ignore dot entry */
+            TempString = FileInfoObject.fname;
+            if (FileInfoObject.fattrib & AM_DIR)	/* It is a directory */
+			{
+                VCOM_printf("./%s\n", TempString);
+            } 
+			else									/* It is a file. */
+			{
+                VCOM_printf("%s\n", TempString);
+            }
+        }
+		VCOM_printf("Done!\n");
+		return 0;
+	//}
+	//VCOM_printf("Can't find directory, is the file system mounted?\n");
+	//return 0;
+}
+
+
+static int ReadFile_C (void)
+{
+	FIL OpenFile;
+	FRESULT res;
+	uint8_t NumBytes = argAsInt(2);
+	uint8_t TempBuffer[256];
+	unsigned int BytesRead;
+	uint16_t i;
+	
+	if(NumBytes > 255)
+	{
+		NumBytes = 255;
+	}
+
+	//Open file
+	res = f_open(&OpenFile, argAsChar(1), FA_OPEN_EXISTING | FA_READ);
+	if(res != FR_OK)
+	{
+		VCOM_printf("Failed to open file (%d)\n", res);
+		return 0;
+	}
+	
+	//Read data
+	res = f_read(&OpenFile, TempBuffer, 255, &BytesRead);
+	if(res != FR_OK)
+	{
+		VCOM_printf("Cannot read from file (%d)\n",res);
+		return 0;
+	}
+	
+	//Write data to screen
+	VCOM_printf("Read %d bytes from file %s:\n", NumBytes, argAsChar(1));
+	f_close(&OpenFile);
+	for(i=0;i<NumBytes;i++)
+	{
+		VCOM_printf("0x%02X,\t", TempBuffer[i]);
+		if( (i & 0x0007) == 0x0007)
+		{
+			VCOM_printf("\n");
+		}
+	}
+	return 0;
+}
+
+static int CHDIR_C (void)
+{
+	FRESULT res;
+
+	res = f_opendir(&OpenDirectoryObject, argAsChar(1));
+
+	if(res != FR_OK)
+	{
+		VCOM_printf("Failed (%d)\n", res);
+	}
+	return 0;
+}
+
+
