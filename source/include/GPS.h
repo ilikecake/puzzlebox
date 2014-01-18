@@ -6,7 +6,7 @@
 #define _GPS_H_
 
 //Standard type definitions
-#include "lpc_types.h"
+//#include "lpc_types.h"
 
 typedef struct
 {
@@ -17,7 +17,7 @@ typedef struct
 	uint8_t UTC_HR;
 	uint8_t UTC_MIN;
 	uint8_t UTC_SEC;
-	
+
 	//Position data
 	uint8_t LAT_DEG;
 	uint8_t LAT_MIN;
@@ -26,7 +26,7 @@ typedef struct
 	uint8_t LONG_MIN;
 	Bool LONG_EAST;
 	int16_t ALT;
-	
+
 	//GPS status data
 	uint8_t LOCK_STATUS;
 	uint8_t SATS;
@@ -42,5 +42,12 @@ void GPSInit (void);
 void GPSReset (uint8_t val);
 Bool GPSGetData(Bool toScreen);
 void UART2_IRQHandler(void);
+portTASK_FUNCTION(vGPSTask, pvParameters);
+
+
+xQueueHandle GPSqueue;//GPS queue
+
+void ParseString(char inputstring[100], char delimiter, char *items);
+
 
 #endif

@@ -13,11 +13,16 @@
 #include "board.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
 
 #include "command.h"
 #include "AD5666.h"
 #include "i2c.h"
 #include "TCA9554A.h"
 #include "AD7606.h"
+#include "GPS.h"
+
+void UARTInit(void);
+
 
 #endif /* MAIN_H_ */

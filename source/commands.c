@@ -66,13 +66,14 @@ const char _F5_NAME[] 			= "stat";
 const char _F5_DESCRIPTION[] 	= "Get status of the device";
 const char _F5_HELPTEXT[]		= "'stat' has no parameters";
 
-/*
+
 //Write a register to the ADC
 static int _F6_Handler (void);
-const char _F6_NAME[] PROGMEM 			= "adwrite";
-const char _F6_DESCRIPTION[] PROGMEM 	= "write to a register on the ADC";
-const char _F6_HELPTEXT[] PROGMEM 		= "adwrite <register> <data>";
+const char _F6_NAME[] 			= "gpsread";
+const char _F6_DESCRIPTION[] 	= "read gps";
+const char _F6_HELPTEXT[] 		= "'gpsread' has no parameters";
 
+/*
 //Set up the calibration for the internal temperature sensor
 static int _F7_Handler (void);
 const char _F7_NAME[] PROGMEM 			= "tempcal";
@@ -124,9 +125,8 @@ const CommandListItem AppCommandList[] =
 	{ _F3_NAME, 	0,  0,	_F3_Handler,	_F3_DESCRIPTION,	_F3_HELPTEXT	},		//gettime
 	{ _F4_NAME, 	0,  3,	_F4_Handler,	_F4_DESCRIPTION,	_F4_HELPTEXT	},		//ad
 	{ _F5_NAME, 	0,  0,	_F5_Handler,	_F5_DESCRIPTION,	_F5_HELPTEXT	},		//STAT
-	/*
-	{ _F6_NAME, 	2,  2,	_F6_Handler,	_F6_DESCRIPTION,	_F6_HELPTEXT	},		//adwrite	
-	{ _F7_NAME, 	0,  0,	_F7_Handler,	_F7_DESCRIPTION,	_F7_HELPTEXT	},		//tempcal
+	{ _F6_NAME, 	0,  0,	_F6_Handler,	_F6_DESCRIPTION,	_F6_HELPTEXT	},		//adwrite
+/*	{ _F7_NAME, 	0,  0,	_F7_Handler,	_F7_DESCRIPTION,	_F7_HELPTEXT	},		//tempcal
 	{ _F8_NAME,		1,  1,	_F8_Handler,	_F8_DESCRIPTION,	_F8_HELPTEXT	},		//beep
 	{ _F9_NAME,		1,  1,	_F9_Handler,	_F9_DESCRIPTION,	_F9_HELPTEXT	},		//relay
 	{ _F10_NAME,	0,  0,	_F10_Handler,	_F10_DESCRIPTION,	_F10_HELPTEXT	},		//cal
@@ -293,5 +293,16 @@ static int _F5_Handler (void)
 
 	return 0;
 }
+
+
+static int _F6_Handler (void)
+{
+	printf("GPS:\r\n");
+
+	//GPSGetData(TRUE);
+	return 0;
+
+}
+
 
 /** @} */

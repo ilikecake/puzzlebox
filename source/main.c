@@ -39,6 +39,7 @@
 
 #include "main.h"
 
+
 //#include "board.h"
 //#include "FreeRTOS.h"
 //#include "task.h"
@@ -90,10 +91,13 @@
 /*****************************************************************************
  * Public types/enumerations/variables
  ****************************************************************************/
+xQueueHandle UART0queue;//command input queue
 
 /*****************************************************************************
  * Private functions
  ****************************************************************************/
+
+
 
 /* Sets up system hardware */
 static void prvSetupHardware(void)
@@ -118,6 +122,7 @@ static void prvSetupHardware(void)
 	//AD5666Init();
 	//AD7606Init();
 
+
 	/* Initial LED0 state is off */
 	Board_LED_Set(0, false);
 }
@@ -135,18 +140,6 @@ static portTASK_FUNCTION(vLEDTask1, pvParameters) {
 	}
 }
 
-/* LED2 toggle thread */
-//static portTASK_FUNCTION(vLEDTask2, pvParameters) {
-//	bool LedState = false;
-//
-//	while (1) {
-//		Board_LED_Set(1, LedState);
-//		LedState = (bool) !LedState;
-//
-//		/* About a 7Hz on/off toggle rate */
-//		vTaskDelay(configTICK_RATE_HZ / 14);
-//	}
-//}
 
 /* This task looks for waiting commands and runs them */
 static portTASK_FUNCTION(vRunCommandTask, pvParameters) {
@@ -163,26 +156,22 @@ static portTASK_FUNCTION(vRunCommandTask, pvParameters) {
 
 /* UART (or output) thread */
 static portTASK_FUNCTION(vUARTTask, pvParameters) {
-	int tickCnt = 0;
+	//int tickCnt = 0;
+	uint8_t dataReceived;
 
 	while (1)
 	{
-		tickCnt = Board_UARTGetChar();
-		if(tickCnt != EOF)
-		{
-			CommandGetInputChar((char)(tickCnt));
-			//Board_UARTPutChar((char)(tickCnt));
-		}
+
+		xQueueReceive(UART0queue, &dataReceived, portMAX_DELAY); //wait indefinitely for data to appear on queue
+
+		CommandGetInputChar((char)(dataReceived));
+
 	}
 
-	//while (1) {
-	//	DEBUGOUT("Tick: %d\r\n", tickCnt);
-	//	tickCnt++;
-
-		/* About a 1s delay here */
-	//	vTaskDelay(configTICK_RATE_HZ);
-	//}
 }
+
+
+
 
 /*****************************************************************************
  * Public functions
@@ -195,6 +184,7 @@ static portTASK_FUNCTION(vUARTTask, pvParameters) {
 int main(void)
 {
 	prvSetupHardware();
+	UARTInit();
 
 	/* LED1 toggle thread */
 	xTaskCreate(vLEDTask1, (signed char *) "vTaskLed1",
@@ -211,10 +201,16 @@ int main(void)
 				configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY + 1UL),
 				(xTaskHandle *) NULL);
 
+	/* GPS thread, gathers and parses data stream from GPS chip*/
+	xTaskCreate(vGPSTask, (signed char *) "vTaskGPS",
+			400, NULL, (tskIDLE_PRIORITY + 1UL),
+				(xTaskHandle *) NULL);
+
 	/* UART output thread, simply counts seconds */
 	xTaskCreate(vRunCommandTask, (signed char *) "vTaskRunCommand",
 				configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY + 2UL),
 				(xTaskHandle *) NULL);
+
 
 	/* Start the scheduler */
 	vTaskStartScheduler();
@@ -233,6 +229,61 @@ int main(void)
 	/* Should never arrive here */
 	return 1;
 }
+
+
+
+void UARTInit(void)
+{
+
+	UART0queue = xQueueCreate(2, sizeof(char));
+
+    Chip_UART_IntConfig(LPC_UART0, UART_INTCFG_RBR, ENABLE); //turns on interrupt when byte is received from UART0
+	NVIC_EnableIRQ(UART0_IRQn);//Enable interrupts for UART0
+
+	return;
+}
+
+void UART0_IRQHandler(void)
+{
+	//handles interrupts for UART0
+	uint8_t charRecieved;
+
+	Chip_UART_ReceiveByte(LPC_UART0 ,&charRecieved);//read a character from the UART0 input buffer
+
+	xQueueSendFromISR(UART0queue, &charRecieved,NULL);//put a recieved character on the queue
+
+	Chip_UART_IntGetStatus(LPC_UART0);
+
+}
+
+
+
+//void UART2_IRQHandler(void)
+//{
+//	//handles interrupts for UART0
+//	uint8_t charRecieved;
+//
+//	Chip_UART_ReceiveByte(LPC_UART0 ,&charRecieved);//read a character from the UART0 input buffer
+//
+//	xQueueSendFromISR(UART0queue, &charRecieved,NULL);//put a recieved character on the queue
+//
+//	Chip_UART_IntGetStatus(LPC_UART0);
+//
+//	return;
+//}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /**
  * @}
