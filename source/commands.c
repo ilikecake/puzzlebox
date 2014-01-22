@@ -29,7 +29,7 @@
 //#include "board.h"
 
 //The number of commands
-const uint8_t NumCommands = 5;
+const uint8_t NumCommands = 6;
 
 //Handler function declerations
 
@@ -69,9 +69,9 @@ const char _F5_HELPTEXT[]		= "'stat' has no parameters";
 
 //Write a register to the ADC
 static int _F6_Handler (void);
-const char _F6_NAME[] 			= "gpsread";
-const char _F6_DESCRIPTION[] 	= "read gps";
-const char _F6_HELPTEXT[] 		= "'gpsread' has no parameters";
+const char _F6_NAME[] 			= "gps";
+const char _F6_DESCRIPTION[] 	= "Display GPS Data";
+const char _F6_HELPTEXT[] 		= "'gps' has no parameters";
 
 /*
 //Set up the calibration for the internal temperature sensor
@@ -297,9 +297,7 @@ static int _F5_Handler (void)
 
 static int _F6_Handler (void)
 {
-	printf("GPS:\r\n");
-
-	//GPSGetData(TRUE);
+	GPSGetData(TRUE);
 	return 0;
 
 }

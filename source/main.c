@@ -142,15 +142,15 @@ static portTASK_FUNCTION(vLEDTask1, pvParameters) {
 
 
 /* This task looks for waiting commands and runs them */
-static portTASK_FUNCTION(vRunCommandTask, pvParameters) {
-
-	while (1)
-	{
-		RunCommand();
-		vTaskDelay(configTICK_RATE_HZ/5);
-
-	}
-}
+//static portTASK_FUNCTION(vRunCommandTask, pvParameters) {
+//
+//	while (1)
+//	{
+//		RunCommand();
+//		vTaskDelay(configTICK_RATE_HZ/5);
+//
+//	}
+//}
 
 
 
@@ -165,6 +165,8 @@ static portTASK_FUNCTION(vUARTTask, pvParameters) {
 		xQueueReceive(UART0queue, &dataReceived, portMAX_DELAY); //wait indefinitely for data to appear on queue
 
 		CommandGetInputChar((char)(dataReceived));
+
+		RunCommand();
 
 	}
 
@@ -198,7 +200,7 @@ int main(void)
 
 	/* UART output thread, simply counts seconds */
 	xTaskCreate(vUARTTask, (signed char *) "vTaskUart",
-				configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY + 1UL),
+				300, NULL, (tskIDLE_PRIORITY + 1UL),
 				(xTaskHandle *) NULL);
 
 	/* GPS thread, gathers and parses data stream from GPS chip*/
@@ -206,10 +208,10 @@ int main(void)
 			400, NULL, (tskIDLE_PRIORITY + 1UL),
 				(xTaskHandle *) NULL);
 
-	/* UART output thread, simply counts seconds */
-	xTaskCreate(vRunCommandTask, (signed char *) "vTaskRunCommand",
-				configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY + 2UL),
-				(xTaskHandle *) NULL);
+//	/* UART output thread, simply counts seconds */
+//	xTaskCreate(vRunCommandTask, (signed char *) "vTaskRunCommand",
+//				configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY + 2UL),
+//				(xTaskHandle *) NULL);
 
 
 	/* Start the scheduler */

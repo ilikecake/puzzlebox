@@ -16,16 +16,16 @@ typedef struct
 	uint8_t UTC_DAY;
 	uint8_t UTC_HR;
 	uint8_t UTC_MIN;
-	uint8_t UTC_SEC;
+	double UTC_SEC;
 
 	//Position data
 	uint8_t LAT_DEG;
-	uint8_t LAT_MIN;
+	double LAT_MIN;
 	Bool LAT_NORTH;
 	uint8_t LONG_DEG;
-	uint8_t LONG_MIN;
+	double LONG_MIN;
 	Bool LONG_EAST;
-	int16_t ALT;
+	double ALT;
 
 	//GPS status data
 	uint8_t LOCK_STATUS;
