@@ -43,7 +43,7 @@
  * Private types/enumerations/variables
  ****************************************************************************/
 static int mode_poll;   				/* Poll/Interrupt mode flag */
-static I2C_ID_T i2cDev = DEFAULT_I2C; 	/* Currently active I2C device */
+//static I2C_ID_T i2cDev = DEFAULT_I2C; 	/* Currently active I2C device */
 
 /* EEPROM SLAVE data */
 //#define I2C_SLAVE_EEPROM_SIZE       64

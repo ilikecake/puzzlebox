@@ -113,10 +113,6 @@ static void prvSetupHardware(void)
 	//Chip_SSP_Init(LPC_SSP1);
 	//Chip_SSP_Enable(LPC_SSP1);
 
-	//Initalize I2C
-	//i2c_app_init(I2C0, SPEED_100KHZ);
-	/* Set default mode to interrupt */
-	//i2c_set_mode(I2C0, 0);
 
 
 	//AD5666Init();
@@ -187,6 +183,9 @@ int main(void)
 {
 	prvSetupHardware();
 	UARTInit();
+	LSM303Init();
+	GPIOInt_Init();//setup interrupt for LSM303 motion
+
 
 	/* LED1 toggle thread */
 	xTaskCreate(vLEDTask1, (signed char *) "vTaskLed1",

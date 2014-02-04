@@ -25,7 +25,7 @@ void GPSInit (void)
 	Chip_IOCON_PinMux(LPC_IOCON, 0, 10, IOCON_MODE_INACT, IOCON_FUNC1);//Set up TXD pins
 	Chip_IOCON_PinMux(LPC_IOCON, 0, 11, IOCON_MODE_INACT, IOCON_FUNC1);//Set up RXD pins
 
-	//Setup pins as output
+	//Setup pins
 	Chip_GPIO_WriteDirBit(LPC_GPIO, 0, 10, true); //Set TXD to output
 	Chip_GPIO_WriteDirBit(LPC_GPIO, 0, 11, false); //set RXD to input
 
@@ -44,7 +44,7 @@ void GPSInit (void)
 //    NVIC_SetPriority(UART2_IRQn, 0x1E); //((0x01<<3)|0x01));
 //    NVIC_EnableIRQ(UART2_IRQn);
 
-	GPSqueue = xQueueCreate(2, sizeof(char));//create queue for storing incoming GPS strings
+	GPSqueue = xQueueCreate(4, sizeof(char));//create queue for storing incoming GPS strings
 	Chip_UART_IntConfig(LPC_UART2, UART_INTCFG_RBR, ENABLE); //turns on interrupt when byte is received from UART2
 	NVIC_EnableIRQ(UART2_IRQn);//Enable interrupts for UART2
 
@@ -82,80 +82,67 @@ void GPSReset (uint8_t val)
 
 
 
-Bool GPSGetData(Bool toScreen)
+Bool GPSGetData(uint8_t forceDisplay)
 {
-	GPSData.UTC_YEAR = 0xFF;
-	GPSData.UTC_HR = 0xFF;
-	GPSDataReady = FALSE;
 
-	NVIC_EnableIRQ(UART2_IRQn);
-
-	while(GPSDataReady == FALSE)
+	if (GPSData.LOCK_STATUS > 0 || forceDisplay == 1)
 	{
-	}
-
-	if(toScreen == TRUE)
-	{
-
-
-		if(GPSData.LOCK_STATUS > 0)
+		printf("------------------------------------\r\n");
+		printf("GPS Data\r\n");
+		printf("------------------------------------\r\n");
+		printf("UTC Date:%u/%u/20%u\r\n", GPSData.UTC_MONTH, GPSData.UTC_DAY, GPSData.UTC_YEAR);
+		printf("UTC Time:%u:%u:%f\r\n", GPSData.UTC_HR, GPSData.UTC_MIN, GPSData.UTC_SEC);
+		printf("Latitude: %u:%f", GPSData.LAT_DEG, GPSData.LAT_MIN);
+		if(GPSData.LAT_NORTH == TRUE)
 		{
-//			printf("------------------------------------\r\n");
-//			printf("GPS Data\r\n");
-//			printf("------------------------------------\r\n");
-//			printf("UTC Date:%u/%u/20%u\r\n", GPSData.UTC_MONTH, GPSData.UTC_DAY, GPSData.UTC_YEAR);
-//			printf("UTC Time:%u:%u:%f\r\n", GPSData.UTC_HR, GPSData.UTC_MIN, GPSData.UTC_SEC);
-//			printf("Latitude: %u:%f", GPSData.LAT_DEG, GPSData.LAT_MIN);
-//			if(GPSData.LAT_NORTH == TRUE)
-//			{
-//				printf(" N\r\n");
-//			}
-//			else
-//			{
-//				printf(" S\r\n");
-//			}
-//			printf("Longitude: %u:%f", GPSData.LONG_DEG, GPSData.LONG_MIN);
-//			if(GPSData.LONG_EAST == TRUE)
-//			{
-//				printf(" E\r\n");
-//			}
-//			else
-//			{
-//				printf(" W\r\n");
-//			}
-//			printf("Altitude: %d\r\n", GPSData.ALT);
-//			printf("Satellites used: %u\r\n", GPSData.SATS);
-//			printf("------------------------------------\r\n");
-
-			printf("\r\nTime: %u:%u:%f",GPSData.UTC_HR, GPSData.UTC_MIN, GPSData.UTC_SEC);
-			printf(", Latitude: %udeg %fmin",GPSData.LAT_DEG, GPSData.LAT_MIN);
-			if(GPSData.LAT_NORTH == TRUE)
-			{
-				printf(" N");
-			}
-			else
-			{
-				printf(" S");
-			}
-			printf(", Longitude: %udeg %fmin",GPSData, GPSData.LONG_DEG, GPSData.LONG_MIN);
-			if(GPSData.LONG_EAST == TRUE)
-			{
-				printf(" E");
-			}
-			else
-			{
-				printf(" W");
-			}
-			printf(", Satellites: %u", GPSData.SATS);
-			printf(", Altitude: %f\r\n", GPSData.ALT);
-
-
+			printf(" N\r\n");
 		}
 		else
 		{
-			printf("No GPS Lock\r\n");
+			printf(" S\r\n");
 		}
+		printf("Longitude: %u:%f", GPSData.LONG_DEG, GPSData.LONG_MIN);
+		if(GPSData.LONG_EAST == TRUE)
+		{
+			printf(" E\r\n");
+		}
+		else
+		{
+			printf(" W\r\n");
+		}
+		printf("Altitude: %d\r\n", GPSData.ALT);
+		printf("Satellites used: %u\r\n", GPSData.SATS);
+		printf("------------------------------------\r\n");
+
+//			printf("\r\nTime: %u:%u:%f",GPSData.UTC_HR, GPSData.UTC_MIN, GPSData.UTC_SEC);
+//			printf(", Latitude: %udeg %fmin",GPSData.LAT_DEG, GPSData.LAT_MIN);
+//			if(GPSData.LAT_NORTH == TRUE)
+//			{
+//				printf(" N");
+//			}
+//			else
+//			{
+//				printf(" S");
+//			}
+//			printf(", Longitude: %udeg %fmin",GPSData, GPSData.LONG_DEG, GPSData.LONG_MIN);
+//			if(GPSData.LONG_EAST == TRUE)
+//			{
+//				printf(" E");
+//			}
+//			else
+//			{
+//				printf(" W");
+//			}
+//			printf(", Satellites: %u", GPSData.SATS);
+//			printf(", Altitude: %f\r\n", GPSData.ALT);
+
+
 	}
+	else
+	{
+		printf("No GPS Lock\r\n");
+	}
+
 
 	return TRUE;
 }
@@ -344,48 +331,48 @@ portTASK_FUNCTION(vGPSTask, pvParameters) {
 					}
 					else if (GPS_Term==3)
 					{  //Latitude
-						GPSData.LAT_DEG = ((uint8_t)GPSBuffer[0] - 48)*100 + ((uint8_t)GPSBuffer[1] - 48)*10 + ((uint8_t)GPSBuffer[2] - 48);
-						if (datacount>=3)
-						{	GPSData.LAT_MIN = ((double)GPSBuffer[3] - 48)*10 + ((double)GPSBuffer[4] - 48);}
-						else
-						{	GPSData.LAT_MIN = 0;}
-
-						if (datacount>=9) //5, 6, 7, 8 are digits after decimal place in minutes
-						{
-							GPSData.LAT_MIN = GPSData.LAT_MIN + ((double)GPSBuffer[6] - 48)/10 + ((double)GPSBuffer[7] - 48)/100+ ((double)GPSBuffer[8] - 48)/1000+ ((double)GPSBuffer[9] - 48)/10000;
-						}
+//						GPSData.LAT_DEG = ((uint8_t)GPSBuffer[0] - 48)*100 + ((uint8_t)GPSBuffer[1] - 48)*10 + ((uint8_t)GPSBuffer[2] - 48);
+//						if (datacount>=3)
+//						{	GPSData.LAT_MIN = ((double)GPSBuffer[3] - 48)*10 + ((double)GPSBuffer[4] - 48);}
+//						else
+//						{	GPSData.LAT_MIN = 0;}
+//
+//						if (datacount>=9) //5, 6, 7, 8 are digits after decimal place in minutes
+//						{
+//							GPSData.LAT_MIN = GPSData.LAT_MIN + ((double)GPSBuffer[6] - 48)/10 + ((double)GPSBuffer[7] - 48)/100+ ((double)GPSBuffer[8] - 48)/1000+ ((double)GPSBuffer[9] - 48)/10000;
+//						}
 					}
 					else if (GPS_Term==4)
 					{ //Latitude N or S
-						if(GPSBuffer[0] == 'N')
-						{	GPSData.LAT_NORTH = TRUE;}
-						else
-						{	GPSData.LAT_NORTH = FALSE;}
+//						if(GPSBuffer[0] == 'N')
+//						{	GPSData.LAT_NORTH = TRUE;}
+//						else
+//						{	GPSData.LAT_NORTH = FALSE;}
 					}
 					else if (GPS_Term==5)
 					{ //Longitude
-						GPSData.LONG_DEG = ((uint8_t)GPSBuffer[0] - 48)*100 + ((uint8_t)GPSBuffer[1] - 48)*10 + ((uint8_t)GPSBuffer[2] - 48);
-						if (datacount>=4)
-						{	GPSData.LONG_MIN = ((double)GPSBuffer[3] - 48)*10 + ((double)GPSBuffer[4] - 48);}
-						else
-						{	GPSData.LONG_MIN = 0;}
-
-						if (datacount>=9) //6, 7, 8, 9 are digits after decimal place in minutes
-						{
-							GPSData.LONG_MIN = GPSData.LONG_MIN + ((double)GPSBuffer[6] - 48)/10 + ((double)GPSBuffer[7] - 48)/100+ ((double)GPSBuffer[8] - 48)/1000+ ((double)GPSBuffer[9] - 48)/10000;
-						}
+//						GPSData.LONG_DEG = ((uint8_t)GPSBuffer[0] - 48)*100 + ((uint8_t)GPSBuffer[1] - 48)*10 + ((uint8_t)GPSBuffer[2] - 48);
+//						if (datacount>=4)
+//						{	GPSData.LONG_MIN = ((double)GPSBuffer[3] - 48)*10 + ((double)GPSBuffer[4] - 48);}
+//						else
+//						{	GPSData.LONG_MIN = 0;}
+//
+//						if (datacount>=9) //6, 7, 8, 9 are digits after decimal place in minutes
+//						{
+//							GPSData.LONG_MIN = GPSData.LONG_MIN + ((double)GPSBuffer[6] - 48)/10 + ((double)GPSBuffer[7] - 48)/100+ ((double)GPSBuffer[8] - 48)/1000+ ((double)GPSBuffer[9] - 48)/10000;
+//						}
 
 					}
 					else if (GPS_Term==6)
 					{ //Longitude E/W
-						if(GPSBuffer[0] == 'E')
-						{
-							GPSData.LONG_EAST = TRUE;
-						}
-						else
-						{
-							GPSData.LONG_EAST = FALSE;
-						}
+//						if(GPSBuffer[0] == 'E')
+//						{
+//							GPSData.LONG_EAST = TRUE;
+//						}
+//						else
+//						{
+//							GPSData.LONG_EAST = FALSE;
+//						}
 					}
 					else if (GPS_Term==7)
 					{ //Speed over ground

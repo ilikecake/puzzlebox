@@ -35,6 +35,7 @@
 #include "sys_config.h"
 #include "cmsis.h"
 
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -326,7 +327,6 @@ STATIC INLINE void IP_I2C_Master_StartXfer(IP_I2C_001_T *pI2C)
 {
 	/* Reset STA, STO, SI */
 	pI2C->CONCLR = I2C_CON_SI | I2C_CON_STO | I2C_CON_STA | I2C_CON_AA;
-
 	/* Enter to Master Transmitter mode */
 	pI2C->CONSET = I2C_CON_I2EN | I2C_CON_STA;
 }

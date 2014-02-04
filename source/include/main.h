@@ -21,6 +21,9 @@
 #include "TCA9554A.h"
 #include "AD7606.h"
 #include "GPS.h"
+#include "lsm303.h"
+#include "GPIO_Interrupt.h"
+
 
 void UARTInit(void);
 

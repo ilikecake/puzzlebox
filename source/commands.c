@@ -29,7 +29,7 @@
 //#include "board.h"
 
 //The number of commands
-const uint8_t NumCommands = 6;
+const uint8_t NumCommands = 9;
 
 //Handler function declerations
 
@@ -71,27 +71,30 @@ const char _F5_HELPTEXT[]		= "'stat' has no parameters";
 static int _F6_Handler (void);
 const char _F6_NAME[] 			= "gps";
 const char _F6_DESCRIPTION[] 	= "Display GPS Data";
-const char _F6_HELPTEXT[] 		= "'gps' has no parameters";
+const char _F6_HELPTEXT[] 		= "'gps' <force display>";
 
-/*
 //Set up the calibration for the internal temperature sensor
 static int _F7_Handler (void);
-const char _F7_NAME[] PROGMEM 			= "tempcal";
-const char _F7_DESCRIPTION[] PROGMEM 	= "Calibrate the internal temperature sensor";
-const char _F7_HELPTEXT[] PROGMEM 		= "'tempcal' has no parameters";
+const char _F7_NAME[]  			= "mag";
+const char _F7_DESCRIPTION[]  	= "Read magnetometer register";
+const char _F7_HELPTEXT[]  		= "'mag' has no parameters";
 
-//Test the buzzer
+
+
+//query an accelerometer register
 static int _F8_Handler (void);
-const char _F8_NAME[] PROGMEM 			= "beep";
-const char _F8_DESCRIPTION[] PROGMEM 	= "Test the buzzer";
-const char _F8_HELPTEXT[] PROGMEM 		= "beep <time>";
+const char _F8_NAME[]  			= "accel";
+const char _F8_DESCRIPTION[]  	= "Read accelerometer register";
+const char _F8_HELPTEXT[]  		= "accel <reg>";
+
 
 //Turn the relay on or off
 static int _F9_Handler (void);
-const char _F9_NAME[] PROGMEM 			= "relay";
-const char _F9_DESCRIPTION[] PROGMEM 	= "Control the relay";
-const char _F9_HELPTEXT[] PROGMEM 		= "relay <state>";
+const char _F9_NAME[]  			= "lsm";
+const char _F9_DESCRIPTION[]  	= "Read mag and accel";
+const char _F9_HELPTEXT[]  		= "lsm";
 
+/*
 //Manual calibration of the ADC
 static int _F10_Handler (void);
 const char _F10_NAME[] PROGMEM 			= "cal";
@@ -125,11 +128,11 @@ const CommandListItem AppCommandList[] =
 	{ _F3_NAME, 	0,  0,	_F3_Handler,	_F3_DESCRIPTION,	_F3_HELPTEXT	},		//gettime
 	{ _F4_NAME, 	0,  3,	_F4_Handler,	_F4_DESCRIPTION,	_F4_HELPTEXT	},		//ad
 	{ _F5_NAME, 	0,  0,	_F5_Handler,	_F5_DESCRIPTION,	_F5_HELPTEXT	},		//STAT
-	{ _F6_NAME, 	0,  0,	_F6_Handler,	_F6_DESCRIPTION,	_F6_HELPTEXT	},		//adwrite
-/*	{ _F7_NAME, 	0,  0,	_F7_Handler,	_F7_DESCRIPTION,	_F7_HELPTEXT	},		//tempcal
-	{ _F8_NAME,		1,  1,	_F8_Handler,	_F8_DESCRIPTION,	_F8_HELPTEXT	},		//beep
-	{ _F9_NAME,		1,  1,	_F9_Handler,	_F9_DESCRIPTION,	_F9_HELPTEXT	},		//relay
-	{ _F10_NAME,	0,  0,	_F10_Handler,	_F10_DESCRIPTION,	_F10_HELPTEXT	},		//cal
+	{ _F6_NAME, 	0,  1,	_F6_Handler,	_F6_DESCRIPTION,	_F6_HELPTEXT	},		//gps
+	{ _F7_NAME, 	1,  1,	_F7_Handler,	_F7_DESCRIPTION,	_F7_HELPTEXT	},		//mag register
+	{ _F8_NAME,		1,  2,	_F8_Handler,	_F8_DESCRIPTION,	_F8_HELPTEXT	},		//accel register
+	{ _F9_NAME,		0,  0,	_F9_Handler,	_F9_DESCRIPTION,	_F9_HELPTEXT	},		//read Accelerometer and Magnetometer
+	/*{ _F10_NAME,	0,  0,	_F10_Handler,	_F10_DESCRIPTION,	_F10_HELPTEXT	},		//cal
 	{ _F11_NAME,	0,  0,	_F11_Handler,	_F11_DESCRIPTION,	_F11_HELPTEXT	},		//temp
 	{ _F12_NAME,	0,  0,	_F12_Handler,	_F12_DESCRIPTION,	_F12_HELPTEXT	},		//twiscan
 	{ _F13_NAME,	1,  3,	_F13_Handler,	_F13_DESCRIPTION,	_F13_HELPTEXT	},		//twiscan
@@ -219,7 +222,7 @@ static int _F3_Handler (void)
 
 	for (i = 0; i <= 0x7F; i++)
 	{
-		if(Chip_I2C_MasterSend(I2C0, i, &DummyByte, 1) > 0)
+		if(Chip_I2C_MasterSend(I2C1, i, &DummyByte, 1) > 0)
 		{
 			printf("Device responded at 0x%02X\r\n", i);
 		}
@@ -297,10 +300,103 @@ static int _F5_Handler (void)
 
 static int _F6_Handler (void)
 {
-	GPSGetData(TRUE);
+	if(NumberOfArguments() >= 1)
+	{
+			GPSGetData(argAsInt(1));
+	}
+	else
+	{
+		GPSGetData(0);
+	}
+
 	return 0;
 
 }
 
+
+
+static int _F7_Handler (void)
+{
+	uint8_t returnCode;
+	uint8_t regvalue;
+
+//	if(NumberOfArguments() >= 1)
+//	{
+//			returnCode = LSM303ReadReg(LSM303_MAGNETOMETER_ADDRESS, argAsInt(1), &regvalue);
+//			if (returnCode == I2C_STATUS_DONE)
+//			{
+//				printf("mag register = %X\r\n",regvalue);
+//			}
+//			else
+//			{
+//				printf("Mag Reg read error %u\r\n", returnCode);
+//			}
+//	}
+
+	printf("Accelerometer Int1 %u\r\n", Chip_GPIO_ReadPortBit(LPC_GPIO, 0, 16));
+
+	//reset lsm303 interrupt latch
+	returnCode = LSM303ReadReg(LSM303_ACCELEROMETER_ADDRESS, LSM303_ACCELEROMETER_INT1_SOURCE, &regvalue);
+
+	return 0;
+
+}
+
+
+
+static int _F8_Handler (void)
+{
+	//LSM303 accelerometer register
+	uint8_t returnCode;
+	uint8_t regvalue;
+
+	if(NumberOfArguments() == 1)
+	{
+			returnCode = LSM303ReadReg(LSM303_ACCELEROMETER_ADDRESS, argAsInt(1), &regvalue);
+			if (returnCode == I2C_STATUS_DONE)
+			{
+				printf("accel register = %X\r\n",regvalue);
+			}
+			else
+			{
+				printf("accel reg read error %u\r\n", returnCode);
+			}
+	}
+	else if(NumberOfArguments() == 2)
+	{
+		LSM303WriteReg(LSM303_ACCELEROMETER_ADDRESS, argAsInt(1), argAsInt(2));
+	}
+
+	return 0;
+
+}
+
+
+static int _F9_Handler (void)
+{
+	uint8_t returnCode;
+
+	returnCode = LSM303ReadData(LSM303_ACCELEROMETER_ADDRESS);
+	if (returnCode == I2C_STATUS_DONE)
+	{
+		printf("Accelerometer: X=%i \tY=%i \tZ=%i\r\n", LSM303AccelerometerData[0], LSM303AccelerometerData[1], LSM303AccelerometerData[2]);
+	}
+	else
+	{
+		printf("Accelerometer error %u\r\n", returnCode);
+	}
+
+	returnCode = LSM303ReadData(LSM303_MAGNETOMETER_ADDRESS);
+	if (returnCode == I2C_STATUS_DONE)
+	{
+		printf("Magnetometer: X=%d \tY=%d \tZ=%d\r\n", LSM303MagnetometerData[0], LSM303MagnetometerData[1], LSM303MagnetometerData[2]);
+	}
+	else
+	{
+		printf("Magnetometer error %u\r\n", returnCode);
+	}
+	return 0;
+
+}
 
 /** @} */
