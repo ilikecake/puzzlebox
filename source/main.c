@@ -168,6 +168,82 @@ static portTASK_FUNCTION(vUARTTask, pvParameters) {
 
 }
 
+/* Read GPS data thread */
+portTASK_FUNCTION(vGPSTask, pvParameters) {
+	uint8_t gps_datareceived;
+	GPSInit();
+
+	while (1)
+	{
+
+		gps_datareceived=xQueueReceive(GPSqueue, &gps_datareceived, portMAX_DELAY); //wait indefinitely for data to appear on queue
+
+		ParseGPSdata(gps_datareceived);
+		//vTaskDelay(100);
+
+	}
+
+}
+
+
+/* Read and calculate orientation thread */
+static portTASK_FUNCTION(vAttitudeTask, pvParameters) {
+
+	uint8_t returnCode;
+	double G[3], M[3], North[3], West[3];
+	double Gmag, Mmag, Nmag;
+	double GdotM;
+	double altitude, azimuth;
+
+
+	while (1)
+	{
+
+		returnCode = LSM303ReadData(LSM303_ACCELEROMETER_ADDRESS);
+		returnCode = LSM303ReadData(LSM303_MAGNETOMETER_ADDRESS);
+
+		//create gravity unit vector
+		Gmag= sqrt(pow((double)LSM303AccelerometerData[0],2)+ pow((double)LSM303AccelerometerData[1],2)+ pow((double)LSM303AccelerometerData[2],2));//magnitude of gravity vector
+		G[0] = (double)LSM303AccelerometerData[0]/Gmag;
+		G[1] = (double)LSM303AccelerometerData[1]/Gmag;
+		G[2] = (double)LSM303AccelerometerData[2]/Gmag;
+
+		altitude = 3.1214592645/2 - darccos(G[0]);//angle between horizon and x axis
+
+		//create magnetic unit vector
+		Mmag= sqrt(pow((double)LSM303MagnetometerData[0],2)+ pow((double)LSM303MagnetometerData[1],2)+ pow((double)LSM303MagnetometerData[2],2));//magnitude of magnetic vector
+		M[0] = (double)LSM303MagnetometerData[0]/Mmag;
+		M[1] = (double)LSM303MagnetometerData[1]/Mmag;
+		M[2] = (double)LSM303MagnetometerData[2]/Mmag;
+
+		//West vector is G x M
+		West[0]=G[1]*M[2]-G[2]*M[1];
+		West[1]=G[2]*M[1]-G[1]*M[2];
+		West[2]=G[0]*M[1]-G[1]*M[0];
+
+		//North vector is M - G dot M / g
+		GdotM = (G[0]*M[0]+G[1]*M[1]+G[2]*M[2]);
+		North[0] = M[0] - GdotM*G[0];
+		North[1] = M[1] - GdotM*G[1];
+		North[2] = M[2] - GdotM*G[2];
+		Nmag= sqrt(pow(North[0],2)+ pow(North[1],2)+ pow(North[2],2));//magnitude of north vector
+		North[0]/=Nmag;
+		North[1]/=Nmag;
+		North[2]/=Nmag;
+
+		//Projection of board fixed X vector onto the world horizontal plane
+		azimuth = datan2(North[0],West[0]);
+
+		printf("accel: %d \t %d \t %d\r\n",G[0],G[1],G[2]);
+
+		//printf("altitude: %d \r\n azimuth: %d",altitude,azimuth);
+
+		/* About a 1Hz on/off toggle rate */
+		vTaskDelay(configTICK_RATE_HZ / 2);
+
+	}
+
+}
 
 
 
@@ -183,8 +259,10 @@ int main(void)
 {
 	prvSetupHardware();
 	UARTInit();
+
 	LSM303Init();
 	GPIOInt_Init();//setup interrupt for LSM303 motion
+
 
 
 	/* LED1 toggle thread */
@@ -206,6 +284,12 @@ int main(void)
 	xTaskCreate(vGPSTask, (signed char *) "vTaskGPS",
 			400, NULL, (tskIDLE_PRIORITY + 1UL),
 				(xTaskHandle *) NULL);
+
+	/* */
+	xTaskCreate(vAttitudeTask, (signed char *) "vTaskAttitude",
+			300, NULL, (tskIDLE_PRIORITY + 1UL),
+				(xTaskHandle *) NULL);
+
 
 //	/* UART output thread, simply counts seconds */
 //	xTaskCreate(vRunCommandTask, (signed char *) "vTaskRunCommand",

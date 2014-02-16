@@ -141,33 +141,62 @@ const CommandListItem AppCommandList[] =
 
 //Command functions
 
+////LED control function
+//static int _F1_Handler (void)
+//{
+//	if(NumberOfArguments() == 2)
+//	{
+//		Board_LED_Set(argAsInt(1), argAsInt(2));
+//	}
+//	else
+//	{
+//		if(argAsInt(1) == 1)
+//		{
+//			//Turn on all leds
+//			Board_LED_Set(1, 1);
+//			Board_LED_Set(2, 1);
+//			Board_LED_Set(3, 1);
+//		}
+//		else
+//		{
+//			//Turn off all leds
+//			Board_LED_Set(1, 0);
+//			Board_LED_Set(2, 0);
+//			Board_LED_Set(3, 0);
+//		}
+//
+//	}
+//	return 0;
+//}
+
+
+
 //LED control function
 static int _F1_Handler (void)
 {
-	if(NumberOfArguments() == 2)
-	{
-		Board_LED_Set(argAsInt(1), argAsInt(2));
-	}
-	else
-	{
-		if(argAsInt(1) == 1)
-		{
-			//Turn on all leds
-			Board_LED_Set(1, 1);
-			Board_LED_Set(2, 1);
-			Board_LED_Set(3, 1);
-		}
-		else
-		{
-			//Turn off all leds
-			Board_LED_Set(1, 0);
-			Board_LED_Set(2, 0);
-			Board_LED_Set(3, 0);
-		}
+	float latitude;
+	float longitude;
+	float azimuth;
+	float altitude;
+	float UT;
 
-	}
+	latitude = 65.4321;
+	longitude = 1.4321;
+	UT=45;
+
+	ephemeris(latitude ,longitude,UT,&azimuth,&altitude);
+
+	printf("azimuth: %d\r\n", azimuth);
+	printf("altitude: %d\r\n", altitude);
+
+
 	return 0;
 }
+
+
+
+
+
 
 static int _F2_Handler (void)
 {

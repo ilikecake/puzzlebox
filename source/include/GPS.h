@@ -36,18 +36,27 @@ GpsDataStruct GPSData;
 volatile Bool GPSDataReady;
 
 
+//uint8_t GPSBuffer[10];
+uint8_t GPS_Pos;
+uint8_t GPS_State;
+uint8_t GPS_Term;
+
+char GPSBuffer[75];
+uint8_t gps_datacount;
+
 
 //Function prototypes
+void ClearGPSBuffer (void);
 void GPSInit (void);
 void GPSReset (uint8_t val);
 Bool GPSGetData(Bool toScreen);
+void ParseString(char inputstring[100], char delimiter, char *items);
+void ParseGPSdata(uint8_t gps_datareceived);
+
 void UART2_IRQHandler(void);
 portTASK_FUNCTION(vGPSTask, pvParameters);
 
-
 xQueueHandle GPSqueue;//GPS queue
-
-void ParseString(char inputstring[100], char delimiter, char *items);
 
 
 #endif

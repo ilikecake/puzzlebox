@@ -9,6 +9,7 @@
 #define MAIN_H_
 
 #include <stdio.h>
+#include <math.h>
 
 #include "board.h"
 #include "FreeRTOS.h"
@@ -23,7 +24,7 @@
 #include "GPS.h"
 #include "lsm303.h"
 #include "GPIO_Interrupt.h"
-
+#include "ephemeris.h"
 
 void UARTInit(void);
 
